@@ -1,0 +1,63 @@
+# --- Secretos y configuracion local ---
+.env
+.env.local
+*.token.json
+tiktok_token.json
+
+# --- Datos y artefactos en tiempo de ejecucion ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+workdir/
+videos/
+*.mp4
+*.mov
+*.webm
+*.log
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# --- Entornos virtuales ---
+.venv/
+venv/
+env/
+ENV/
+.env.venv
+
+# --- Testing / tooling ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+
+# --- Editores y SO ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Sistema ---
+*.pid
+*.log.*

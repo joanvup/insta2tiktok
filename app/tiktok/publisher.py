@@ -5,14 +5,33 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .auth import TikTokAuth
+from .chunking import plan_chunks
 from .client import TikTokAPIError, TikTokClient
+from .validator import validate
 from ..config.settings import Settings, get_settings
 from ..storage.database import ReelRepository
 from ..storage.models import Reel, ReelStatus
 
 log = logging.getLogger("insta2tiktok.tiktok.publisher")
 
-MAX_TIKTOK_CAPTION = 2200
+MAX_TIKTOK_CAPTION_UTF16 = 2200
+
+
+def _utf16_len(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _utf16_slice(text: str, max_units: int) -> str:
+    raw = text.encode("utf-16-le")
+    chunk = raw[: max_units * 2]
+    # Evita partir un surrogate pair: truncamos hasta que sea decodificable
+    while True:
+        try:
+            return chunk.decode("utf-16-le")
+        except UnicodeDecodeError:
+            if len(chunk) <= 2:
+                return ""
+            chunk = chunk[:-2]
 
 
 class TikTokPublisher:
@@ -34,55 +53,41 @@ class TikTokPublisher:
         self._client = client or TikTokClient(self._auth, self._settings)
 
     def _build_caption(self, original_caption: str) -> str:
-        prefix = self._settings.TIKTOK_CAPTION_PREFIX
-        suffix = self._settings.TIKTOK_CAPTION_SUFFIX
-        hashtags = self._settings.TIKTOK_CAPTION_HASHTAGS
+        prefix = self._settings.TIKTOK_CAPTION_PREFIX or ""
+        suffix = self._settings.TIKTOK_CAPTION_SUFFIX or ""
+        hashtags = self._settings.TIKTOK_CAPTION_HASHTAGS or ""
 
-        parts = []
-        if prefix:
-            parts.append(prefix)
-        parts.append(original_caption)
-        if hashtags:
-            parts.append(hashtags)
-        if suffix:
-            parts.append(suffix)
-
+        parts = [p for p in [prefix, original_caption, hashtags, suffix] if p]
         full = " ".join(parts).strip()
-        if len(full) > MAX_TIKTOK_CAPTION:
-            overflow = len(full) - MAX_TIKTOK_CAPTION
-            trimmed_caption = original_caption[: max(0, len(original_caption) - overflow)]
-            parts_trimmed = []
-            if prefix:
-                parts_trimmed.append(prefix)
-            parts_trimmed.append(trimmed_caption)
-            if hashtags:
-                parts_trimmed.append(hashtags)
-            if suffix:
-                parts_trimmed.append(suffix)
-            full = " ".join(parts_trimmed).strip()
 
-        return full[:MAX_TIKTOK_CAPTION]
+        if _utf16_len(full) > MAX_TIKTOK_CAPTION_UTF16:
+            overhead = _utf16_len(" ".join(p for p in [prefix, hashtags, suffix] if p) + " " * 3)
+            budget = MAX_TIKTOK_CAPTION_UTF16 - overhead
+            trimmed = _utf16_slice(original_caption, max(0, budget))
+            parts2 = [p for p in [prefix, trimmed, hashtags, suffix] if p]
+            full = " ".join(parts2).strip()
+
+        result = _utf16_slice(full, MAX_TIKTOK_CAPTION_UTF16)
+        return result
 
     def _validate_video(self, video_path: Path) -> str | None:
         if not video_path.exists():
             return f"Archivo no encontrado: {video_path}"
 
-        size_mb = video_path.stat().st_size / 1_048_576
-        if size_mb > 4096:
-            return f"Video demasiado grande: {size_mb:.1f} MB (máx 4 GB)"
-
-        if video_path.suffix.lower() not in {".mp4", ".webm", ".mov"}:
-            return f"Formato no soportado: {video_path.suffix}"
-
-        return None
+        ext_msg = validate(
+            video_path,
+            max_duration=self._client.max_duration_seconds(),
+            ffprobe_bin=self._settings.FFPROBE_PATH or None,
+        )
+        return ext_msg
 
     def publish(self, reel: Reel) -> bool:
-        video_path = Path(reel.video_path)
+        video_path = Path(reel.video_path) if reel.video_path else Path("")
         log.info("Publicando Reel %s en TikTok...", reel.shortcode)
 
         validation_error = self._validate_video(video_path)
         if validation_error:
-            log.error("Validación falló: %s", validation_error)
+            log.error("Validacion fallo: %s", validation_error)
             reel.status = ReelStatus.FAILED.value
             reel.fail_reason = validation_error
             ReelRepository.update(reel)
@@ -93,22 +98,29 @@ class TikTokPublisher:
 
         try:
             caption = self._build_caption(reel.caption or "")
-            privacy = self._settings.TIKTOK_PRIVACY
+            privacy = self._client.resolve_privacy_level(self._settings.TIKTOK_PRIVACY)
 
-            init_data = self._client.init_upload(video_path, caption, privacy)
+            plan = plan_chunks(video_path.stat().st_size)
+
+            init_data = self._client.init_upload(video_path, caption, privacy, plan)
             upload_url = init_data.get("upload_url", "")
             publish_id = init_data.get("publish_id", "")
 
             if not upload_url:
-                raise TikTokAPIError("No se recibió upload_url de TikTok")
+                raise TikTokAPIError("No se recibio upload_url de TikTok")
 
-            self._client.upload_video_chunks(upload_url, video_path)
+            if not publish_id:
+                log.warning("No se recibio publish_id, no se podra verificar el estado")
+
+            self._client.upload_video_chunks(upload_url, video_path, plan)
 
             if publish_id:
                 result = self._client.check_publish_status(publish_id)
                 reel.tiktok_publish_id = publish_id
-            else:
-                log.warning("No se recibió publish_id, no se puede verificar estado")
+
+                post_ids = (result or {}).get("publicaly_available_post_id") or []
+                if post_ids:
+                    log.info("Post moderado y publico: %s", post_ids)
 
             reel.status = ReelStatus.PUBLISHED.value
             reel.published_at = datetime.now(timezone.utc)
@@ -118,7 +130,15 @@ class TikTokPublisher:
             return True
 
         except TikTokAPIError as exc:
-            log.error("Error de API TikTok publicando %s: %s", reel.shortcode, exc)
+            retryable = getattr(exc, "retryable", False)
+            if "unaudited_client" in exc.code:
+                log.error(
+                    "Cliente no auditado: solo se puede publicar como privado (SELF_ONLY). "
+                    "Solucion: usa TIKTOK_PRIVACY=SELF_ONLY o solicita la revision en "
+                    "developers.tiktok.com/application/content-posting-api."
+                )
+
+            log.error("Error de API TikTok publicando %s: %s (code=%s)", reel.shortcode, exc, exc.code)
             reel.status = ReelStatus.FAILED.value
             reel.fail_reason = str(exc)
             reel.retry_count += 1

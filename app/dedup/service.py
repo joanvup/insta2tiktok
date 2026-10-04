@@ -53,8 +53,10 @@ class DuplicateReason(str):
 
 
 class DedupService:
-    def __init__(self) -> None:
-        self._settings = get_settings()
+    def __init__(self, settings=None) -> None:
+        from ..config.settings import Settings
+
+        self._settings: Settings = settings or get_settings()  # type: ignore[assignment]
 
     def check(
         self,

@@ -20,13 +20,27 @@ class Settings(BaseSettings):
 
     TIKTOK_CLIENT_KEY: str = Field(description="TikTok app client key")
     TIKTOK_CLIENT_SECRET: str = Field(description="TikTok app client secret")
-    TIKTOK_REDIRECT_URI: str = Field(default="http://localhost:8080/callback", description="OAuth2 redirect URI")
-    TIKTOK_SCOPES: str = Field(default="video.publish,video.upload", description="Scopes separados por coma")
+    TIKTOK_REDIRECT_URI: str = Field(
+        default="https://localhost:8080/callback",
+        description="OAuth redirect URI completo (TikTok exige HTTPS)",
+    )
+    TIKTOK_SCOPES: str = Field(default="video.publish", description="Scopes separados por coma")
     TIKTOK_TOKEN_PATH: Path = Field(default=Path("tiktok_token.json"), description="Ruta al archivo de token")
-    TIKTOK_PRIVACY: str = Field(default="SELF_ONLY", description="Nivel de privacidad: SELF_ONLY, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, PUBLIC_TO_EVERYONE")
+    TIKTOK_CALLBACK_HOST: str = Field(default="127.0.0.1", description="Host local donde escucha el callback OAuth")
+    TIKTOK_CALLBACK_PORT: int = Field(default=8080, ge=1, le=65535, description="Puerto local del callback OAuth")
+    TIKTOK_PRIVACY: str = Field(
+        default="SELF_ONLY",
+        description="Nivel de privacidad: SELF_ONLY, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, PUBLIC_TO_EVERYONE",
+    )
     TIKTOK_CAPTION_PREFIX: str = Field(default="", description="Prefijo para el caption en TikTok")
     TIKTOK_CAPTION_SUFFIX: str = Field(default="", description="Sufijo para el caption en TikTok")
     TIKTOK_CAPTION_HASHTAGS: str = Field(default="", description="Hashtags adicionales para TikTok (ej: #repost #viral)")
+    TIKTOK_MAX_VIDEO_DURATION_SEC: int = Field(
+        default=600,
+        ge=60,
+        description="Duración maxima de video enviada a la API (segundos) cuando creator_info no disponible",
+    )
+    FFPROBE_PATH: str = Field(default="ffprobe", description="Ruta al binario ffprobe (o 'ffprobe' en PATH)")
 
     DB_PATH: Path = Field(default=Path("reels.db"), description="Ruta a la base de datos SQLite")
     WORKDIR: Path = Field(default=Path("workdir"), description="Directorio de trabajo para videos descargados")

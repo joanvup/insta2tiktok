@@ -151,10 +151,14 @@ class Orchestrator:
         self._log_summary(summary)
         return summary
 
-    def retry_failed(self) -> RunSummary:
+    def retry_failed(self, force_all: bool = False) -> RunSummary:
         summary = RunSummary()
-        failed = ReelRepository.get_failed_retriable(self._settings.MAX_RETRY_COUNT)
-        log.info("Reintentando %d Reels fallidos...", len(failed))
+        if force_all:
+            failed = ReelRepository.get_failed_retriable(max_retries=10**9)
+            log.warning("Reintentando TODOS los Reels fallidos sin limite (%d)", len(failed))
+        else:
+            failed = ReelRepository.get_failed_retriable(self._settings.MAX_RETRY_COUNT)
+            log.info("Reintentando %d Reels fallidos...", len(failed))
 
         for reel in failed:
             if reel.video_path and Path(reel.video_path).exists():

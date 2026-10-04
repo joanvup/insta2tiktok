@@ -8,7 +8,7 @@ import pytest
 os.environ.setdefault("INSTAGRAM_USERNAME", "test_user")
 os.environ.setdefault("TIKTOK_CLIENT_KEY", "test_key")
 os.environ.setdefault("TIKTOK_CLIENT_SECRET", "test_secret")
-os.environ.setdefault("TIKTOK_REDIRECT_URI", "http://localhost:8080/callback")
+os.environ.setdefault("TIKTOK_REDIRECT_URI", "https://example.com/callback")
 
 from app.config.settings import Settings, get_settings
 from app.dedup.service import DedupService, sha256_of_file
