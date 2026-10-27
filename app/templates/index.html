@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_title }} · Reels de Instagram a TikTok</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body
+  data-max-caption="{{ max_caption }}"
+  data-max-reels="{{ max_reels }}"
+  data-default-reels="{{ default_reels }}"
+  data-max-attempts="{{ max_attempts }}"
+>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">i2t</span>
+      <div>
+        <p class="brand-eyebrow">Puente local de contenido</p>
+        <h1>insta2tiktok</h1>
+      </div>
+    </div>
+    <p class="topbar-note">Tus sesiones se guardan únicamente en este equipo.</p>
+  </header>
+
+  <main class="shell" id="contenido">
+    <section class="panel connections-panel" aria-labelledby="connections-title">
+      <div class="section-head">
+        <div>
+          <p class="step">Paso 01</p>
+          <h2 id="connections-title">Conecta tus cuentas</h2>
+          <p class="section-copy">
+            Inicia sesión una vez en cada plataforma. La aplicación no guarda contraseñas:
+            conserva solo la sesión del navegador en <code>data/</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="connections">
+        <article class="connection-card" id="igCard">
+          <div class="connection-top">
+            <div class="platform">
+              <span class="platform-mark ig-mark" aria-hidden="true">IG</span>
+              <div>
+                <h3>Instagram</h3>
+                <p class="connection-detail" id="igUser">Cuenta de origen</p>
+              </div>
+            </div>
+            <span class="status-pill is-offline" id="igBadge">Sin conectar</span>
+          </div>
+          <p class="connection-message" id="igMessage"></p>
+          <p class="hint">
+            Se abrirá Instagram en Chromium para que inicies sesión una sola vez.
+          </p>
+          <div class="connection-actions">
+            <button class="btn btn-secondary" type="button" id="connectIg">Conectar Instagram</button>
+            <button class="btn btn-ghost" type="button" id="toggleIgCookie" aria-expanded="false" aria-controls="igCookieForm">
+              Usar cookie
+            </button>
+          </div>
+          <form class="cookie-form hidden" id="igCookieForm">
+            <p class="hint">
+              Alternativa si la ventana del navegador no funciona. Copia la cookie
+              <code>sessionid</code> desde las herramientas de desarrollo de Instagram.
+            </p>
+            <label class="field">
+              <span>sessionid</span>
+              <input type="password" id="igSessionid" autocomplete="off" spellcheck="false" required>
+            </label>
+            <label class="field">
+              <span>csrftoken <em>(opcional)</em></span>
+              <input type="text" id="igCsrf" autocomplete="off" spellcheck="false">
+            </label>
+            <button class="btn btn-secondary" type="submit" id="saveIgCookie">Guardar sesión</button>
+          </form>
+        </article>
+
+        <article class="connection-card" id="tiktokCard">
+          <div class="connection-top">
+            <div class="platform">
+              <span class="platform-mark tiktok-mark" aria-hidden="true">TT</span>
+              <div>
+                <h3>TikTok</h3>
+                <p class="connection-detail" id="tiktokUser">Cuenta de destino</p>
+              </div>
+            </div>
+            <span class="status-pill is-offline" id="tiktokBadge">Sin conectar</span>
+          </div>
+          <p class="connection-message" id="tiktokMessage"></p>
+          <div class="connection-actions">
+            <button class="btn btn-secondary" type="button" id="connectTiktok">Conectar TikTok</button>
+          </div>
+          <p class="hint">
+            Se abrirá TikTok Studio. Completa el acceso con QR, contraseña o verificación
+            en dos pasos (2FA) en esa ventana.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <div class="banners" id="banners" aria-live="polite"></div>
+
+    <section class="panel" aria-labelledby="reels-title">
+      <div class="section-head">
+        <div>
+          <p class="step">Paso 02</p>
+          <h2 id="reels-title">Elige los reels</h2>
+          <p class="section-copy">
+            Carga los últimos reels de una cuenta pública de Instagram y selecciona
+            los que quieres llevar a TikTok.
+          </p>
+        </div>
+      </div>
+
+      <form class="reels-form" id="reelsForm">
+        <label class="field">
+          <span>Cuenta de Instagram</span>
+          <input type="text" id="username" name="username" placeholder="usuario (sin @)" autocomplete="off" spellcheck="false" maxlength="30" required>
+        </label>
+        <label class="field field-small">
+          <span>Cantidad</span>
+          <input type="number" id="limit" name="limit" min="1" max="{{ max_reels }}" value="{{ default_reels }}" required>
+        </label>
+        <button class="btn btn-primary" type="submit" id="loadReels">Cargar reels</button>
+      </form>
+      <p class="hint" id="reelsHint">Máximo {{ max_reels }} reels por carga. Instagram puede limitar solicitudes repetidas.</p>
+
+      <div class="reels-grid" id="reelsGrid"></div>
+      <div class="empty-state" id="reelsEmpty">
+        <p>Todavía no has cargado ningún reel.</p>
+        <p class="hint">Introduce una cuenta pública y pulsa «Cargar reels».</p>
+      </div>
+
+      <div class="selection-bar hidden" id="selectionBar">
+        <p><strong id="selectionCount">0 seleccionados</strong><span class="selection-note"> para publicar</span></p>
+        <button class="btn btn-primary" type="button" id="reviewButton">Revisar y publicar</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="jobs-title">
+      <div class="section-head section-head-inline">
+        <div>
+          <p class="step">Paso 03</p>
+          <h2 id="jobs-title">Cola e historial</h2>
+          <p class="section-copy">La publicación es secuencial, con una pausa entre reels para reducir riesgos.</p>
+        </div>
+        <div class="jobs-summary" id="jobsSummary"></div>
+      </div>
+      <div class="jobs-list" id="jobsList"></div>
+      <div class="empty-state" id="jobsEmpty">
+        <p>Aún no hay publicaciones.</p>
+        <p class="hint">Los trabajos aparecerán aquí en cuanto envíes tu primera selección.</p>
+      </div>
+    </section>
+
+    <section class="legal-box" aria-labelledby="legal-title">
+      <h2 id="legal-title">Uso responsable</h2>
+      <p>
+        Publica únicamente contenido propio o para el que tengas autorización. Automatizar
+        TikTok puede infringir sus Términos de Servicio y provocar restricciones o el cierre
+        de la cuenta. La aplicación no garantiza la aceptación, visibilidad ni permanencia
+        del contenido. Úsala bajo tu responsabilidad.
+      </p>
+      <p class="hint">
+        Si TikTok no permite confirmar que el video será público, la aplicación se detiene
+        antes de pulsar Publicar.
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>insta2tiktok · Ejecución local en 127.0.0.1 · Sesiones y videos en <code>data/</code></p>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal-backdrop hidden" id="reviewModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle">
+      <header class="modal-head">
+        <div>
+          <p class="step">Paso 02 · Revisión</p>
+          <h2 id="reviewTitle">Revisa las descripciones</h2>
+        </div>
+        <button class="icon-btn" type="button" id="closeReview" aria-label="Cerrar revisión">×</button>
+      </header>
+      <div class="modal-body">
+        <p class="hint modal-hint">
+          Puedes editar la descripción de cada reel. TikTok admite hasta
+          {{ max_caption }} caracteres.
+        </p>
+        <div class="review-list" id="reviewList"></div>
+        <label class="checkline">
+          <input type="checkbox" id="rightsCheck">
+          <span>Confirmo que tengo derechos o autorización para publicar este contenido y su audio.</span>
+        </label>
+        <p class="modal-error hidden" id="reviewError" role="alert"></p>
+      </div>
+      <footer class="modal-foot">
+        <button class="btn btn-ghost" type="button" id="cancelReview">Cancelar</button>
+        <button class="btn btn-primary" type="button" id="publishButton" disabled>Publicar seleccionados</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
